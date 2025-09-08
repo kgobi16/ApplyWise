@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+
 struct ContentView: View {
     @StateObject private var jobManager = JobApplicationManager()
     @State private var selectedTab = 1
@@ -50,10 +51,7 @@ struct ContentView: View {
                 }
                 .tag(3)
         }
-        .onAppear {
-            // Load sample data when the app starts
-            jobManager.setupSampleData()
-        }
+        
     }
 }
 
@@ -66,24 +64,21 @@ struct ContentView: View {
 
 #Preview("Kanban Placeholder") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
     
-    return KanbanView()
+    KanbanView()
         .environmentObject(manager)
 }
 
 #Preview("Analytics Placeholder") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return AnalyticsView()
+
+    AnalyticsView()
         .environmentObject(manager)
 }
 
 #Preview("Add Application Placeholder") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
     
-    return QuickAddView()
+    QuickAddView()
         .environmentObject(manager)
 }

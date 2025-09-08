@@ -34,12 +34,6 @@ struct KanbanView: View {
                     }) {
                         Label("Add Application", systemImage: "plus.circle.fill")
                     }
-                    
-                    Button(action: {
-                        jobManager.setupSampleData()
-                    }) {
-                        Label("Refresh Data", systemImage: "arrow.clockwise")
-                    }
                 }
             }
             .sheet(isPresented: $showingAddView) {
@@ -56,8 +50,7 @@ struct KanbanView: View {
         .navigationViewStyle(StackNavigationViewStyle()) // Force single view on iPad
     }
     
-    // MARK: - Landscape Layout (Primary)
-    
+    // Landscape Layout (Primary mode for kanban board)
     @ViewBuilder
     private func landscapeLayout(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
@@ -68,45 +61,51 @@ struct KanbanView: View {
             
             Divider()
             
-            // Main Kanban Board
-            ScrollView(.horizontal, showsIndicators: true) {
+            // Main Kanban Board or Empty State
+            if jobManager.getAllApplications().isEmpty {
+                KanbanEmptyStateView()
+            } else {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ForEach(ApplicationStatus.allCases) { status in
+                            KanbanColumnView(
+                                status: status,
+                                applications: jobManager.getApplications(by: status)
+                            )
+                            .frame(width: max(280, geometry.size.width / 6))
+                            .frame(maxHeight: .infinity)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 16)
+                }
+                .background(Color(.systemGroupedBackground))
+            }
+        }
+    }
+    
+    // Portrait Layout (Fallback mode)
+    @ViewBuilder
+    private func portraitLayout(geometry: GeometryProxy) -> some View {
+        if jobManager.getAllApplications().isEmpty {
+            KanbanEmptyStateView()
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(ApplicationStatus.allCases) { status in
                         KanbanColumnView(
                             status: status,
                             applications: jobManager.getApplications(by: status)
                         )
-                        .frame(width: max(280, geometry.size.width / 6))
-                        .frame(maxHeight: .infinity)
+                        .frame(width: 280)
                     }
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 16)
+                .padding()
             }
-            .background(Color(.systemGroupedBackground))
         }
     }
     
-    // MARK: - Portrait Layout (Fallback)
-    
-    @ViewBuilder
-    private func portraitLayout(geometry: GeometryProxy) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 16) {
-                ForEach(ApplicationStatus.allCases) { status in
-                    KanbanColumnView(
-                        status: status,
-                        applications: jobManager.getApplications(by: status)
-                    )
-                    .frame(width: 280)
-                }
-            }
-            .padding()
-        }
-    }
-    
-    // MARK: - Helper Methods
-    
+    // Helper method for handling new application creation
     private func handleAddApplication(_ application: JobApplication) {
         do {
             try application.validate()
@@ -122,8 +121,52 @@ struct KanbanView: View {
     }
 }
 
-// MARK: - Kanban Header View
+// Empty state view for when no applications exist
+struct KanbanEmptyStateView: View {
+    var body: some View {
+        VStack(spacing: 30) {
+            Image(systemName: "kanban")
+                .font(.system(size: 80))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 12) {
+                Text("No Applications Yet")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Text("Your kanban board will show your job applications organized by status once you start adding them.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Kanban columns will include:")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                ForEach(ApplicationStatus.allCases, id: \.self) { status in
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(status.color)
+                            .frame(width: 12, height: 12)
+                        Text(status.rawValue)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding()
+            .background(Color(.systemGroupedBackground))
+            .cornerRadius(12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+}
 
+// Header view with application statistics
 struct KanbanHeaderView: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -135,34 +178,42 @@ struct KanbanHeaderView: View {
                     .fontWeight(.bold)
                 
                 let stats = jobManager.getApplicationStats()
-                Text("\(stats.total) applications • \(stats.interviews) interviews • \(stats.offers) offers")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if stats.total > 0 {
+                    Text("\(stats.total) applications • \(stats.interviews) interviews • \(stats.offers) offers")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Start tracking your job applications")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Spacer()
             
-            // Quick Action Buttons
-            HStack(spacing: 12) {
-                QuickStatView(
-                    title: "Success Rate",
-                    value: String(format: "%.1f%%", jobManager.getApplicationStats().successRate),
-                    color: .green
-                )
-                
-                QuickStatView(
-                    title: "Interview Rate",
-                    value: String(format: "%.1f%%", jobManager.getApplicationStats().interviewRate),
-                    color: .blue
-                )
-                
-                let highPriorityCount = jobManager.getHighPriorityApplications().count
-                if highPriorityCount > 0 {
+            // Quick Action Buttons - only show if there are applications
+            if jobManager.getAllApplications().count > 0 {
+                HStack(spacing: 12) {
                     QuickStatView(
-                        title: "High Priority",
-                        value: "\(highPriorityCount)",
-                        color: .orange
+                        title: "Success Rate",
+                        value: String(format: "%.1f%%", jobManager.getApplicationStats().successRate),
+                        color: .green
                     )
+                    
+                    QuickStatView(
+                        title: "Interview Rate",
+                        value: String(format: "%.1f%%", jobManager.getApplicationStats().interviewRate),
+                        color: .blue
+                    )
+                    
+                    let highPriorityCount = jobManager.getHighPriorityApplications().count
+                    if highPriorityCount > 0 {
+                        QuickStatView(
+                            title: "High Priority",
+                            value: "\(highPriorityCount)",
+                            color: .orange
+                        )
+                    }
                 }
             }
         }
@@ -171,6 +222,7 @@ struct KanbanHeaderView: View {
     }
 }
 
+// Quick statistic display component
 struct QuickStatView: View {
     let title: String
     let value: String
@@ -194,8 +246,7 @@ struct QuickStatView: View {
     }
 }
 
-// MARK: - Kanban Column View
-
+// Individual kanban column for each application status
 struct KanbanColumnView: View {
     let status: ApplicationStatus
     let applications: [JobApplication]
@@ -256,7 +307,7 @@ struct KanbanColumnView: View {
                 .padding(.horizontal, 4)
             }
             
-            // Empty State
+            // Empty State for individual columns
             if applications.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: emptyStateIcon)
@@ -286,6 +337,7 @@ struct KanbanColumnView: View {
         .cornerRadius(12)
     }
     
+    // Icons for empty column states
     private var emptyStateIcon: String {
         switch status {
         case .applied: return "paperplane"
@@ -297,6 +349,7 @@ struct KanbanColumnView: View {
         }
     }
     
+    // Messages for empty column states
     private var emptyStateMessage: String {
         switch status {
         case .applied: return "No applications yet"
@@ -309,8 +362,7 @@ struct KanbanColumnView: View {
     }
 }
 
-// MARK: - Job Card View
-
+// Individual job application card component
 struct JobCardView: View {
     @ObservedObject var application: JobApplication
     @EnvironmentObject var jobManager: JobApplicationManager
@@ -343,10 +395,11 @@ struct JobCardView: View {
                     Button(action: {
                         showingStatusPicker = true
                     }) {
-                        Circle()
-                            .fill(application.status.color)
-                            .frame(width: 12, height: 12)
+                        Image(systemName: "chevron.down.circle.fill")
+                            .foregroundColor(application.status.color)
+                            .font(.system(size: 16))
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             
@@ -422,13 +475,10 @@ struct JobCardView: View {
     }
 }
 
-// MARK: - Previews
-
+// Preview configurations
 #Preview("Kanban View") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return KanbanView()
+    KanbanView()
         .environmentObject(manager)
         .previewInterfaceOrientation(.landscapeLeft)
 }

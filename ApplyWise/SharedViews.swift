@@ -7,12 +7,12 @@
 
 import SwiftUI
 
-//Application Detail Sheet (Shared Component)
-
+// Application Detail Sheet (Shared Component)
 struct ApplicationDetailSheet: View {
     @ObservedObject var application: JobApplication
     @EnvironmentObject var jobManager: JobApplicationManager
     @Environment(\.presentationMode) var presentationMode
+    @State private var showingStatusPicker = false
     
     var body: some View {
         NavigationView {
@@ -42,7 +42,47 @@ struct ApplicationDetailSheet: View {
                     .background(Color.gray.opacity(0.05))
                     .cornerRadius(12)
                     
-                    //Job Details
+                    // Action Buttons
+                    HStack(spacing: 12) {
+                        // Follow Up Email Button
+                        if !application.contactEmail.isEmpty {
+                            Button(action: {
+                                openEmailApp()
+                            }) {
+                                HStack {
+                                    Image(systemName: "envelope.fill")
+                                    Text("Follow Up")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.blue)
+                                .cornerRadius(8)
+                            }
+                        }
+                        
+                        // Status Change Button
+                        Button(action: {
+                            showingStatusPicker = true
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text("Change Status")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(application.status.color)
+                            .cornerRadius(8)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    
+                    // Job Details
                     VStack(alignment: .leading, spacing: 16) {
                         if !application.location.isEmpty {
                             DetailRowView(title: "Location", value: application.location, icon: "location")
@@ -86,12 +126,38 @@ struct ApplicationDetailSheet: View {
                     }
                 }
             }
+            .confirmationDialog("Change Status", isPresented: $showingStatusPicker) {
+                ForEach(ApplicationStatus.allCases) { status in
+                    Button(status.rawValue) {
+                        application.updateStatus(status)
+                        jobManager.updateApplication(application)
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Select a new status for this application")
+            }
+        }
+    }
+    
+    // Open email app with pre-filled recipient
+    private func openEmailApp() {
+        let email = application.contactEmail
+        let subject = "Following up on \(application.jobTitle) position"
+        let body = "Hello,\n\nI wanted to follow up on my application for the \(application.jobTitle) position at \(application.companyName).\n\nThank you for your time and consideration.\n\nBest regards"
+        
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        
+        if let url = URL(string: "mailto:\(email)?subject=\(encodedSubject)&body=\(encodedBody)") {
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url)
+            }
         }
     }
 }
 
 // Detail Row View (Shared Component)
-
 struct DetailRowView: View {
     let title: String
     let value: String
@@ -112,7 +178,6 @@ struct DetailRowView: View {
 }
 
 // Add Job Application Sheet (Shared Component)
-
 struct AddJobApplicationSheet: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var companyName = ""
@@ -187,6 +252,7 @@ struct AddJobApplicationSheet: View {
         }
     }
     
+    // Save application with validation
     private func saveApplication() {
         let application = JobApplication(
             companyName: companyName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -208,8 +274,7 @@ struct AddJobApplicationSheet: View {
     }
 }
 
-// MARK: - Previews
-
+// Preview configurations
 #Preview("Application Detail Sheet") {
     let application = TaskFactory.createJobApplication(
         companyName: "Apple Inc",

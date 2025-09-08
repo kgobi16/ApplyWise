@@ -7,8 +7,7 @@
 
 import SwiftUI
 
-//Quick Add View (Uses SharedViews components)
-
+// Quick Add View (Uses SharedViews components)
 struct QuickAddView: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     @State private var showingAddSheet = false
@@ -52,7 +51,7 @@ struct QuickAddView: View {
                 }
                 .padding(.horizontal)
                 
-                // Recent additions section
+                // Recent additions section or welcome message
                 if !jobManager.applications.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
@@ -79,19 +78,40 @@ struct QuickAddView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    // Empty state
-                    VStack(spacing: 12) {
-                        Image(systemName: "tray")
-                            .font(.largeTitle)
-                            .foregroundColor(.secondary)
+                    // Welcome state with helpful information
+                    VStack(spacing: 20) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "briefcase")
+                                .font(.largeTitle)
+                                .foregroundColor(.secondary)
+                            
+                            Text("Welcome to ApplyWise")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text("Track your job applications, monitor your progress, and never miss a follow-up again.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
                         
-                        Text("No applications yet")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Add your first job application to get started")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("What you can track:")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                FeatureRow(icon: "building.2", text: "Company and job details")
+                                FeatureRow(icon: "person.crop.circle", text: "Contact information")
+                                FeatureRow(icon: "flag", text: "Application priority levels")
+                                FeatureRow(icon: "bell", text: "Follow-up reminders")
+                                FeatureRow(icon: "chart.bar", text: "Success analytics")
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemGroupedBackground))
+                        .cornerRadius(12)
                     }
                     .padding()
                 }
@@ -101,13 +121,6 @@ struct QuickAddView: View {
             .padding(.vertical)
             .navigationTitle("Quick Add")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Refresh") {
-                        jobManager.setupSampleData()
-                    }
-                }
-            }
             .sheet(isPresented: $showingAddSheet) {
                 // Using the SharedViews component - same as KanbanView
                 AddJobApplicationSheet { application in
@@ -138,8 +151,27 @@ struct QuickAddView: View {
     }
 }
 
-// MARK: - Recent Application Row
+// Feature row for welcome screen
+struct FeatureRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.blue)
+                .frame(width: 20)
+            
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+        }
+    }
+}
 
+// Recent application row component
 struct RecentApplicationRow: View {
     let application: JobApplication
     
@@ -209,8 +241,7 @@ struct RecentApplicationRow: View {
     }
 }
 
-// MARK: - Helper Views (Shared with other views)
-
+// Helper views (Shared with other views)
 struct StatCard: View {
     let title: String
     let value: String
@@ -234,13 +265,10 @@ struct StatCard: View {
     }
 }
 
-// MARK: - Previews
-
+// Preview configurations
 #Preview("Quick Add View") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return QuickAddView()
+    QuickAddView()
         .environmentObject(manager)
 }
 

@@ -9,16 +9,22 @@ import SwiftUI
 
 struct ListView: View {
     @EnvironmentObject var jobManager: JobApplicationManager
+    // Search functionality - triggers UI updates when user types
     @State private var searchText = ""
+    // Filter options - maintains selected filter state
     @State private var selectedStatus: ApplicationStatus?
     @State private var selectedPriority: TaskPriority?
+    // Sorting - remembers user's preferred sort order
     @State private var sortOrder: SortOrder = .dateDescending
+    // Sheet presentations - controls modal display state
     @State private var showingFilterSheet = false
     @State private var showingExportSheet = false
+    // Multi-selection functionality - tracks selected items
     @State private var selectedApplications = Set<UUID>()
     @State private var isSelectionMode = false
     @State private var showingBulkActionSheet = false
     
+    // Available sort options for applications
     enum SortOrder: String, CaseIterable, Identifiable {
         case dateDescending = "Newest First"
         case dateAscending = "Oldest First"
@@ -31,10 +37,11 @@ struct ListView: View {
         var id: String { self.rawValue }
     }
     
+    // Applies all filters and sorting to applications
     var filteredAndSortedApplications: [JobApplication] {
         var applications = jobManager.getAllApplications()
         
-        // Apply search filter
+        // Apply search filter across multiple fields
         if !searchText.isEmpty {
             applications = applications.filter { app in
                 app.companyName.localizedCaseInsensitiveContains(searchText) ||
@@ -42,6 +49,22 @@ struct ListView: View {
                 app.location.localizedCaseInsensitiveContains(searchText) ||
                 app.notes.localizedCaseInsensitiveContains(searchText)
             }
+    }
+    
+    // Open email app with pre-filled follow-up message
+     func openFollowUpEmail(for application: JobApplication) {
+        let email = application.contactEmail
+        let subject = "Following up on \(application.jobTitle) position"
+        let body = "Hello,\n\nI wanted to follow up on my application for the \(application.jobTitle) position at \(application.companyName).\n\nThank you for your time and consideration.\n\nBest regards"
+        
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        
+        if let url = URL(string: "mailto:\(email)?subject=\(encodedSubject)&body=\(encodedBody)") {
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url)
+            }
+        }
         }
         
         // Apply status filter
@@ -54,14 +77,14 @@ struct ListView: View {
             applications = applications.filter { $0.priority == priority }
         }
         
-        // Apply sorting
+        // Apply selected sorting method
         return sortApplications(applications, by: sortOrder)
     }
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Filter Summary Bar
+                // Show active filters summary when filters are applied
                 if selectedStatus != nil || selectedPriority != nil {
                     FilterSummaryBar(
                         selectedStatus: $selectedStatus,
@@ -70,21 +93,22 @@ struct ListView: View {
                     )
                 }
                 
-                // Quick Stats Header
-                if !isSelectionMode {
+                // Show statistics header when not in selection mode and have data
+                if !isSelectionMode && jobManager.getAllApplications().count > 0 {
                     QuickStatsHeader()
                         .environmentObject(jobManager)
                 }
                 
-                // Main List
+                // Main applications list with conditional sectioning
                 List {
                     if filteredAndSortedApplications.isEmpty {
                         EmptyStateView(
                             searchText: searchText,
-                            hasFilters: selectedStatus != nil || selectedPriority != nil
+                            hasFilters: selectedStatus != nil || selectedPriority != nil,
+                            hasApplications: jobManager.getAllApplications().count > 0
                         )
                     } else {
-                        // Section headers based on sort order
+                        // Group by status when status sorting is selected
                         if sortOrder == .status {
                             ForEach(ApplicationStatus.allCases) { status in
                                 let statusApplications = filteredAndSortedApplications.filter { $0.status == status }
@@ -103,6 +127,7 @@ struct ListView: View {
                                 }
                             }
                         } else if sortOrder == .priorityHigh || sortOrder == .priorityLow {
+                            // Group by priority when priority sorting is selected
                             ForEach(TaskPriority.allCases.reversed()) { priority in
                                 let priorityApplications = filteredAndSortedApplications.filter { $0.priority == priority }
                                 if !priorityApplications.isEmpty {
@@ -138,8 +163,8 @@ struct ListView: View {
                 }
                 .searchable(text: $searchText, prompt: "Search applications...")
                 .refreshable {
-                    // Refresh functionality
-                    jobManager.setupSampleData()
+                    // Refresh gesture - production apps would reload from server
+                    // Currently no action needed as data is already in memory
                 }
             }
             .navigationTitle(isSelectionMode ? "\(selectedApplications.count) Selected" : "Applications")
@@ -157,6 +182,7 @@ struct ListView: View {
                             Label("Filter", systemImage: hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                                 .foregroundColor(hasActiveFilters ? .blue : .primary)
                         }
+                        .disabled(jobManager.getAllApplications().isEmpty)
                     }
                 }
                 
@@ -180,20 +206,19 @@ struct ListView: View {
                                     }
                                 }
                             }
+                            .disabled(jobManager.getAllApplications().isEmpty)
                             
                             Divider()
                             
                             Button("Select Multiple") {
                                 enterSelectionMode()
                             }
+                            .disabled(jobManager.getAllApplications().isEmpty)
                             
                             Button("Export All") {
                                 showingExportSheet = true
                             }
-                            
-                            Button("Refresh Data") {
-                                jobManager.setupSampleData()
-                            }
+                            .disabled(jobManager.getAllApplications().isEmpty)
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
@@ -235,8 +260,9 @@ struct ListView: View {
         }
     }
     
-    // MARK: - Helper Functions
+    // Helper functions for data manipulation
     
+    // Sorts applications based on selected criteria
     private func sortApplications(_ applications: [JobApplication], by order: SortOrder) -> [JobApplication] {
         switch order {
         case .dateDescending:
@@ -256,6 +282,7 @@ struct ListView: View {
         }
     }
     
+    // Converts priority enum to numeric value for sorting
     private func priorityValue(_ priority: TaskPriority) -> Int {
         switch priority {
         case .urgent: return 4
@@ -265,6 +292,7 @@ struct ListView: View {
         }
     }
     
+    // Converts status enum to numeric value for sorting
     private func statusValue(_ status: ApplicationStatus) -> Int {
         switch status {
         case .applied: return 1
@@ -276,10 +304,12 @@ struct ListView: View {
         }
     }
     
+    // Checks if any filters are currently applied
     private var hasActiveFilters: Bool {
         selectedStatus != nil || selectedPriority != nil
     }
     
+    // Toggles selection state for multi-select functionality
     private func toggleSelection(for id: UUID) {
         if selectedApplications.contains(id) {
             selectedApplications.remove(id)
@@ -288,16 +318,19 @@ struct ListView: View {
         }
     }
     
+    // Enters multi-selection mode
     private func enterSelectionMode() {
         isSelectionMode = true
         selectedApplications.removeAll()
     }
     
+    // Exits multi-selection mode and clears selections
     private func exitSelectionMode() {
         isSelectionMode = false
         selectedApplications.removeAll()
     }
     
+    // Handles swipe-to-delete functionality
     private func deleteApplications(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
@@ -307,6 +340,7 @@ struct ListView: View {
         }
     }
     
+    // Deletes all selected applications in batch mode
     private func deleteSelectedApplications() {
         withAnimation {
             for id in selectedApplications {
@@ -316,6 +350,7 @@ struct ListView: View {
         }
     }
     
+    // Sets priority for all selected applications
     private func setBulkPriority(_ priority: TaskPriority) {
         for id in selectedApplications {
             if let application = jobManager.getAllApplications().first(where: { $0.id == id }) {
@@ -326,6 +361,7 @@ struct ListView: View {
         exitSelectionMode()
     }
     
+    // Sets status for all selected applications
     private func setBulkStatus(_ status: ApplicationStatus) {
         for id in selectedApplications {
             if let application = jobManager.getAllApplications().first(where: { $0.id == id }) {
@@ -336,6 +372,7 @@ struct ListView: View {
         exitSelectionMode()
     }
     
+    // Returns applications to export based on current selection
     private func getApplicationsToExport() -> [JobApplication] {
         if isSelectionMode && !selectedApplications.isEmpty {
             return filteredAndSortedApplications.filter { selectedApplications.contains($0.id) }
@@ -345,8 +382,7 @@ struct ListView: View {
     }
 }
 
-// MARK: - Quick Stats Header
-
+// Quick statistics header showing key metrics
 struct QuickStatsHeader: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -364,6 +400,7 @@ struct QuickStatsHeader: View {
     }
 }
 
+// Individual statistic item component
 struct QuickStatItem: View {
     let title: String
     let value: String
@@ -384,11 +421,11 @@ struct QuickStatItem: View {
     }
 }
 
-// MARK: - Application List Row
-
+// Individual application row in the list
 struct ApplicationListRow: View {
     @ObservedObject var application: JobApplication
     @EnvironmentObject var jobManager: JobApplicationManager
+    // Sheet presentation - controls detail view display
     @State private var showingDetail = false
     
     let isSelected: Bool
@@ -397,7 +434,7 @@ struct ApplicationListRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Selection Circle
+            // Selection circle for multi-select mode
             if selectionMode {
                 Button(action: onSelectionToggle) {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -407,9 +444,9 @@ struct ApplicationListRow: View {
                 .buttonStyle(PlainButtonStyle())
             }
             
-            // Main Content
+            // Main application information
             VStack(alignment: .leading, spacing: 8) {
-                // Header Row
+                // Company and job title
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(application.companyName)
@@ -426,7 +463,7 @@ struct ApplicationListRow: View {
                     Spacer()
                     
                     VStack(alignment: .trailing, spacing: 4) {
-                        // Status Badge
+                        // Status badge
                         Text(application.status.rawValue)
                             .font(.caption)
                             .fontWeight(.medium)
@@ -436,7 +473,7 @@ struct ApplicationListRow: View {
                             .foregroundColor(application.status.color)
                             .cornerRadius(12)
                         
-                        // Priority Indicator
+                        // Priority indicator
                         HStack(spacing: 4) {
                             Circle()
                                 .fill(application.priority.color)
@@ -448,9 +485,8 @@ struct ApplicationListRow: View {
                     }
                 }
                 
-                // Details Row
+                // Location, salary, and metadata
                 HStack {
-                    // Location & Salary
                     VStack(alignment: .leading, spacing: 2) {
                         if !application.location.isEmpty {
                             Label(application.location, systemImage: "location.fill")
@@ -469,7 +505,7 @@ struct ApplicationListRow: View {
                     
                     Spacer()
                     
-                    // Date and Indicators
+                    // Date and status indicators
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(application.applicationDate.formatted(date: .abbreviated, time: .omitted))
                             .font(.caption)
@@ -497,7 +533,7 @@ struct ApplicationListRow: View {
                     }
                 }
                 
-                // Progress Indicator (if needed)
+                // Follow-up alert if due soon
                 if let followUp = application.followUpDate, followUp <= Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date() {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -519,7 +555,7 @@ struct ApplicationListRow: View {
             }
             .padding(.vertical, 4)
             
-            // Action Buttons
+            // Action buttons when not in selection mode
             if !selectionMode {
                 VStack(spacing: 8) {
                     Button(action: { showingDetail = true }) {
@@ -566,8 +602,9 @@ struct ApplicationListRow: View {
     }
 }
 
-// MARK: - Supporting Views
+// Supporting view components
 
+// Shows active filters and result count
 struct FilterSummaryBar: View {
     @Binding var selectedStatus: ApplicationStatus?
     @Binding var selectedPriority: TaskPriority?
@@ -610,6 +647,7 @@ struct FilterSummaryBar: View {
     }
 }
 
+// Removable filter chip component
 struct FilterChip: View {
     let title: String
     let color: Color
@@ -634,6 +672,7 @@ struct FilterChip: View {
     }
 }
 
+// Section header for status-grouped lists
 struct StatusSectionHeader: View {
     let status: ApplicationStatus
     let count: Int
@@ -658,6 +697,7 @@ struct StatusSectionHeader: View {
     }
 }
 
+// Section header for priority-grouped lists
 struct PrioritySectionHeader: View {
     let priority: TaskPriority
     let count: Int
@@ -682,10 +722,12 @@ struct PrioritySectionHeader: View {
     }
 }
 
+// Quick action button for advancing application status
 struct StatusQuickActionButton: View {
     @ObservedObject var application: JobApplication
     @EnvironmentObject var jobManager: JobApplicationManager
     
+    // Determines next logical status in the application process
     var nextStatus: ApplicationStatus? {
         switch application.status {
         case .applied: return .screening
@@ -710,9 +752,11 @@ struct StatusQuickActionButton: View {
     }
 }
 
+// Empty state when no applications match filters
 struct EmptyStateView: View {
     let searchText: String
     let hasFilters: Bool
+    let hasApplications: Bool
     
     var body: some View {
         VStack(spacing: 16) {
@@ -732,12 +776,33 @@ struct EmptyStateView: View {
                 Text("Try adjusting your filter criteria")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-            } else {
-                Text("No applications yet")
-                    .font(.headline)
-                Text("Start by adding your first job application")
-                    .font(.subheadline)
+            } else if !hasApplications {
+                VStack(spacing: 12) {
+                    Text("No applications yet")
+                        .font(.headline)
+                    Text("Start by adding your first job application to track your job search progress.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Features available once you add applications:")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                        .padding(.top)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Search and filter applications", systemImage: "magnifyingglass")
+                        Label("Sort by company, date, or priority", systemImage: "arrow.up.arrow.down")
+                        Label("Track application status changes", systemImage: "checkmark.circle")
+                        Label("Set follow-up reminders", systemImage: "bell")
+                        Label("Export your application data", systemImage: "square.and.arrow.up")
+                    }
+                    .font(.caption)
                     .foregroundColor(.secondary)
+                }
+            } else {
+                Text("No applications available")
+                    .font(.headline)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -745,8 +810,7 @@ struct EmptyStateView: View {
     }
 }
 
-// MARK: - Filter Sheet
-
+// Filter selection sheet
 struct FilterSheetView: View {
     @Environment(\.presentationMode) var presentationMode
     @Binding var selectedStatus: ApplicationStatus?
@@ -807,8 +871,7 @@ struct FilterSheetView: View {
     }
 }
 
-// MARK: - Export Sheet
-
+// Export options sheet
 struct ExportSheetView: View {
     @Environment(\.presentationMode) var presentationMode
     let applications: [JobApplication]
@@ -852,34 +915,27 @@ struct ExportSheetView: View {
         }
     }
     
+    // Export methods - placeholder implementations for production
     private func exportAsCSV() {
-        // CSV export logic would go here
         print("Exporting \(applications.count) applications as CSV")
         presentationMode.wrappedValue.dismiss()
     }
     
     private func exportAsPDF() {
-        // PDF export logic would go here
         print("Exporting \(applications.count) applications as PDF")
         presentationMode.wrappedValue.dismiss()
     }
     
     private func shareSummary() {
-        // Share summary logic would go here
         print("Sharing summary of \(applications.count) applications")
         presentationMode.wrappedValue.dismiss()
     }
 }
 
-
-
-// MARK: - Previews
-
+// Development previews
 #Preview("List View") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return ListView()
+    ListView()
         .environmentObject(manager)
 }
 
@@ -899,20 +955,4 @@ struct ExportSheetView: View {
     )
     .environmentObject(JobApplicationManager())
     .padding()
-}
-
-#Preview("Filter Summary Bar") {
-    FilterSummaryBar(
-        selectedStatus: .constant(.interviewing),
-        selectedPriority: .constant(.high),
-        resultCount: 5
-    )
-}
-
-#Preview("Quick Stats Header") {
-    let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return QuickStatsHeader()
-        .environmentObject(manager)
 }

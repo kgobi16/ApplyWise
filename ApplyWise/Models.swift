@@ -1,7 +1,7 @@
 import SwiftUI
 import Foundation
 
-// MARK: - Base Protocols
+//Base Protocols
 
 protocol TaskProtocol: ObservableObject, Identifiable {
     var id: UUID { get }
@@ -15,6 +15,7 @@ protocol TaskProtocol: ObservableObject, Identifiable {
     func updateLastModified()
 }
 
+// Ensures consistent status management across different object types
 protocol StatusManageable {
     associatedtype StatusType: CaseIterable & RawRepresentable where StatusType.RawValue == String
     var status: StatusType { get set }
@@ -36,8 +37,8 @@ protocol JobApplicationProtocol: TaskProtocol, StatusManageable, ContactManageab
     var location: String { get set }
 }
 
-// MARK: - Enums
 
+// Provides type safety and color mapping for priority levels
 enum TaskPriority: String, CaseIterable, Identifiable, Codable {
     case low = "Low"
     case medium = "Medium"
@@ -46,6 +47,7 @@ enum TaskPriority: String, CaseIterable, Identifiable, Codable {
     
     var id: String { self.rawValue }
     
+    // Computed property maps priorities to visual indicators
     var color: Color {
         switch self {
         case .low: return .green
@@ -56,6 +58,7 @@ enum TaskPriority: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// Raw values enable string persistence while maintaining type safety
 enum ApplicationStatus: String, CaseIterable, Identifiable, Codable {
     case applied = "Applied"
     case screening = "Screening"
@@ -66,6 +69,7 @@ enum ApplicationStatus: String, CaseIterable, Identifiable, Codable {
     
     var id: String { self.rawValue }
     
+    // Associates each status with distinct UI colors
     var color: Color {
         switch self {
         case .applied: return .blue
@@ -78,6 +82,7 @@ enum ApplicationStatus: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// Centralizes error handling with user-friendly messages
 enum AppError: Error, LocalizedError {
     case invalidEmail
     case emptyFields
@@ -85,6 +90,7 @@ enum AppError: Error, LocalizedError {
     case saveFailed
     case invalidDate
     
+    // LocalizedError provides consistent error messaging
     var errorDescription: String? {
         switch self {
         case .invalidEmail:
@@ -101,9 +107,10 @@ enum AppError: Error, LocalizedError {
     }
 }
 
-// MARK: - Base Task Class
+//Base Task Class
 
 class BaseTask: ObservableObject, TaskProtocol, Codable {
+    // @Published triggers UI updates when properties change
     @Published var id: UUID
     @Published var title: String
     @Published var priority: TaskPriority
@@ -130,7 +137,7 @@ class BaseTask: ObservableObject, TaskProtocol, Codable {
         lastUpdatedDate = Date()
     }
     
-    // MARK: - Codable Implementation
+    //Codable Implementation - enables data persistence
     
     enum CodingKeys: String, CodingKey {
         case id, title, priority, createdDate, lastUpdatedDate, notes
@@ -157,9 +164,10 @@ class BaseTask: ObservableObject, TaskProtocol, Codable {
     }
 }
 
-// MARK: - Job Application Class (Inherits from BaseTask)
+//Job Application Class (Inherits from BaseTask)
 
 class JobApplication: BaseTask, JobApplicationProtocol, ContactManageable {
+    // @Published ensures UI reactivity for job-specific properties
     @Published var companyName: String
     @Published var jobTitle: String
     @Published var applicationDate: Date
@@ -195,6 +203,7 @@ class JobApplication: BaseTask, JobApplicationProtocol, ContactManageable {
         }
     }
     
+    // override extends parent validation with job-specific rules
     override func validate() throws {
         try super.validate()
         if companyName.isEmpty || jobTitle.isEmpty {
@@ -203,13 +212,14 @@ class JobApplication: BaseTask, JobApplicationProtocol, ContactManageable {
         try validateContact()
     }
     
+    // private encapsulates internal implementation details
     private func isValidEmail(_ email: String) -> Bool {
         let emailRegEx = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
         let emailPred = NSPredicate(format:"SELF MATCHES %@", emailRegEx)
         return emailPred.evaluate(with: email)
     }
     
-    // MARK: - Codable Implementation
+    //Codable Implementation
     
     enum JobApplicationCodingKeys: String, CodingKey {
         case companyName, jobTitle, applicationDate, status, followUpDate, salary, location, contactEmail, contactName
@@ -230,6 +240,7 @@ class JobApplication: BaseTask, JobApplicationProtocol, ContactManageable {
         try super.init(from: decoder)
     }
     
+    // override customizes encoding for job-specific properties
     override func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: JobApplicationCodingKeys.self)
         try container.encode(companyName, forKey: .companyName)
@@ -246,28 +257,9 @@ class JobApplication: BaseTask, JobApplicationProtocol, ContactManageable {
     }
 }
 
-// MARK: - Task Factory (Factory Pattern)
-
+// Factory pattern centralizes object creation
 class TaskFactory {
     static func createJobApplication(companyName: String, jobTitle: String) -> JobApplication {
         return JobApplication(companyName: companyName, jobTitle: jobTitle)
     }
-}
-
-// MARK: - Preview Support
-
-#Preview("Job Application Model") {
-    let application = TaskFactory.createJobApplication(companyName: "Apple Inc", jobTitle: "iOS Developer")
-    application.priority = .high
-    application.salary = "$120,000"
-    application.location = "Cupertino, CA"
-    application.contactEmail = "jobs@apple.com"
-    
-    return VStack {
-        Text("Sample Job Application Created")
-        Text("Company: \(application.companyName)")
-        Text("Title: \(application.jobTitle)")
-        Text("Priority: \(application.priority.rawValue)")
-    }
-    .padding()
 }

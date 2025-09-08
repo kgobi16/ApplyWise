@@ -12,6 +12,7 @@ struct AnalyticsView: View {
     @State private var selectedTimeRange: TimeRange = .month
     @State private var selectedChart: ChartType = .status
     
+    // Time range options for filtering analytics data
     enum TimeRange: String, CaseIterable, Identifiable {
         case week = "Week"
         case month = "Month"
@@ -30,6 +31,7 @@ struct AnalyticsView: View {
         }
     }
     
+    // Chart type options for different analytics views
     enum ChartType: String, CaseIterable, Identifiable {
         case status = "Status Distribution"
         case timeline = "Application Timeline"
@@ -43,65 +45,70 @@ struct AnalyticsView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Header Controls
-                    VStack(spacing: 16) {
-                        // Time Range Picker
-                        Picker("Time Range", selection: $selectedTimeRange) {
-                            ForEach(TimeRange.allCases) { range in
-                                Text(range.rawValue).tag(range)
+                    // Show empty state if no applications exist
+                    if jobManager.getAllApplications().isEmpty {
+                        AnalyticsEmptyStateView()
+                    } else {
+                        // Header Controls
+                        VStack(spacing: 16) {
+                            // Time Range Picker
+                            Picker("Time Range", selection: $selectedTimeRange) {
+                                ForEach(TimeRange.allCases) { range in
+                                    Text(range.rawValue).tag(range)
+                                }
+                            }
+                            .pickerStyle(SegmentedPickerStyle())
+                            
+                            // Chart Type Picker
+                            Picker("Chart Type", selection: $selectedChart) {
+                                ForEach(ChartType.allCases) { type in
+                                    Text(type.rawValue).tag(type)
+                                }
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                        }
+                        .padding()
+                        .background(Color(.systemGroupedBackground))
+                        .cornerRadius(12)
+                        
+                        // Key Metrics Dashboard
+                        KeyMetricsDashboard()
+                            .environmentObject(jobManager)
+                        
+                        // Main Chart
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(selectedChart.rawValue)
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            switch selectedChart {
+                            case .status:
+                                StatusDistributionChart()
+                                    .environmentObject(jobManager)
+                            case .timeline:
+                                ApplicationTimelineChart(timeRange: selectedTimeRange)
+                                    .environmentObject(jobManager)
+                            case .success:
+                                SuccessMetricsChart()
+                                    .environmentObject(jobManager)
+                            case .priority:
+                                PriorityAnalysisChart()
+                                    .environmentObject(jobManager)
                             }
                         }
-                        .pickerStyle(SegmentedPickerStyle())
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(12)
+                        .shadow(color: .gray.opacity(0.1), radius: 4)
                         
-                        // Chart Type Picker
-                        Picker("Chart Type", selection: $selectedChart) {
-                            ForEach(ChartType.allCases) { type in
-                                Text(type.rawValue).tag(type)
-                            }
-                        }
-                        .pickerStyle(MenuPickerStyle())
-                    }
-                    .padding()
-                    .background(Color(.systemGroupedBackground))
-                    .cornerRadius(12)
-                    
-                    // Key Metrics Dashboard
-                    KeyMetricsDashboard()
-                        .environmentObject(jobManager)
-                    
-                    // Main Chart
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(selectedChart.rawValue)
-                            .font(.headline)
-                            .padding(.horizontal)
+                        // Insights and Recommendations
+                        InsightsSection()
+                            .environmentObject(jobManager)
                         
-                        switch selectedChart {
-                        case .status:
-                            StatusDistributionChart()
-                                .environmentObject(jobManager)
-                        case .timeline:
-                            ApplicationTimelineChart(timeRange: selectedTimeRange)
-                                .environmentObject(jobManager)
-                        case .success:
-                            SuccessMetricsChart()
-                                .environmentObject(jobManager)
-                        case .priority:
-                            PriorityAnalysisChart()
-                                .environmentObject(jobManager)
-                        }
+                        // Detailed Statistics
+                        DetailedStatisticsSection(timeRange: selectedTimeRange)
+                            .environmentObject(jobManager)
                     }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
-                    .shadow(color: .gray.opacity(0.1), radius: 4)
-                    
-                    // Insights and Recommendations
-                    InsightsSection()
-                        .environmentObject(jobManager)
-                    
-                    // Detailed Statistics
-                    DetailedStatisticsSection(timeRange: selectedTimeRange)
-                        .environmentObject(jobManager)
                 }
                 .padding()
             }
@@ -117,12 +124,11 @@ struct AnalyticsView: View {
                         Button("Share Report") {
                             shareAnalyticsReport()
                         }
-                        Button("Refresh Data") {
-                            jobManager.setupSampleData()
-                        }
+                       
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .disabled(jobManager.getAllApplications().isEmpty)
                 }
             }
         }
@@ -139,8 +145,46 @@ struct AnalyticsView: View {
     }
 }
 
-// MARK: - Key Metrics Dashboard
+// Empty state view for when no applications exist
+struct AnalyticsEmptyStateView: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 80))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 12) {
+                Text("No Analytics Available")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Text("Start adding job applications to see analytics and insights about your job search progress.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            Text("Analytics will show:")
+                .font(.headline)
+                .foregroundColor(.primary)
+                .padding(.top)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Application success rates", systemImage: "percent")
+                Label("Timeline trends", systemImage: "chart.line.uptrend.xyaxis")
+                Label("Status distribution", systemImage: "chart.pie")
+                Label("Priority analysis", systemImage: "flag")
+            }
+            .font(.subheadline)
+            .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+}
 
+// Key metrics dashboard component
 struct KeyMetricsDashboard: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -160,7 +204,7 @@ struct KeyMetricsDashboard: View {
                 
                 MetricCard(
                     title: "Success Rate",
-                    value: String(format: "%.1f%%", stats.successRate),
+                    value: stats.total > 0 ? String(format: "%.1f%%", stats.successRate) : "0%",
                     subtitle: "Offers/Total",
                     color: stats.successRate >= 10 ? .green : .orange,
                     icon: "target"
@@ -170,7 +214,7 @@ struct KeyMetricsDashboard: View {
             HStack(spacing: 12) {
                 MetricCard(
                     title: "Interview Rate",
-                    value: String(format: "%.1f%%", stats.interviewRate),
+                    value: stats.total > 0 ? String(format: "%.1f%%", stats.interviewRate) : "0%",
                     subtitle: "Interviews/Total",
                     color: stats.interviewRate >= 20 ? .green : .orange,
                     icon: "person.2.fill"
@@ -192,6 +236,7 @@ struct KeyMetricsDashboard: View {
     }
 }
 
+// Individual metric card component
 struct MetricCard: View {
     let title: String
     let value: String
@@ -231,6 +276,7 @@ struct MetricCard: View {
     }
 }
 
+// Weekly progress tracking component
 struct WeeklyProgressView: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -311,8 +357,9 @@ struct WeeklyProgressView: View {
     }
 }
 
-// MARK: - Chart Views
+// Chart views for different analytics
 
+// Status distribution chart component
 struct StatusDistributionChart: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -380,6 +427,7 @@ struct StatusDistributionChart: View {
     }
 }
 
+// Timeline chart component
 struct ApplicationTimelineChart: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     let timeRange: AnalyticsView.TimeRange
@@ -465,6 +513,7 @@ struct ApplicationTimelineChart: View {
     }
 }
 
+// Success metrics funnel chart
 struct SuccessMetricsChart: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -501,36 +550,44 @@ struct SuccessMetricsChart: View {
                 Text("Improvement Areas")
                     .font(.headline)
                 
-                if stats.interviewRate < 20 {
-                    InsightRow(
-                        icon: "doc.text",
-                        text: "Consider improving your resume - interview rate is below average (20%)",
-                        color: .orange
-                    )
-                }
-                
-                if stats.successRate < 10 {
-                    InsightRow(
-                        icon: "person.crop.circle",
-                        text: "Focus on interview skills - offer rate could be improved (target 10%+)",
-                        color: .red
-                    )
-                }
-                
-                if stats.total < 10 {
+                if stats.total == 0 {
                     InsightRow(
                         icon: "paperplane",
-                        text: "Increase application volume for better opportunities",
+                        text: "Start applying to jobs to track your success metrics",
                         color: .blue
                     )
-                }
-                
-                if stats.interviewRate >= 20 && stats.successRate >= 10 && stats.total >= 10 {
-                    InsightRow(
-                        icon: "checkmark.circle",
-                        text: "Great job! Your metrics are above average",
-                        color: .green
-                    )
+                } else {
+                    if stats.interviewRate < 20 {
+                        InsightRow(
+                            icon: "doc.text",
+                            text: "Consider improving your resume - interview rate is below average (20%)",
+                            color: .orange
+                        )
+                    }
+                    
+                    if stats.successRate < 10 {
+                        InsightRow(
+                            icon: "person.crop.circle",
+                            text: "Focus on interview skills - offer rate could be improved (target 10%+)",
+                            color: .red
+                        )
+                    }
+                    
+                    if stats.total < 10 {
+                        InsightRow(
+                            icon: "paperplane",
+                            text: "Increase application volume for better opportunities",
+                            color: .blue
+                        )
+                    }
+                    
+                    if stats.interviewRate >= 20 && stats.successRate >= 10 && stats.total >= 10 {
+                        InsightRow(
+                            icon: "checkmark.circle",
+                            text: "Great job! Your metrics are above average",
+                            color: .green
+                        )
+                    }
                 }
             }
             .padding()
@@ -540,6 +597,7 @@ struct SuccessMetricsChart: View {
     }
 }
 
+// Priority analysis chart
 struct PriorityAnalysisChart: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -552,56 +610,61 @@ struct PriorityAnalysisChart: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            HStack(alignment: .bottom, spacing: 12) {
-                ForEach(priorityData, id: \.category) { dataPoint in
-                    VStack(spacing: 4) {
-                        Rectangle()
-                            .fill(dataPoint.color)
-                            .frame(width: 50, height: CGFloat(dataPoint.value * 25))
-                            .cornerRadius(6)
-                        
-                        Text("\(Int(dataPoint.value))")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                        
-                        Text(dataPoint.category)
+            if priorityData.isEmpty {
+                EmptyChartView(message: "No applications to analyze")
+            } else {
+                HStack(alignment: .bottom, spacing: 12) {
+                    ForEach(priorityData, id: \.category) { dataPoint in
+                        VStack(spacing: 4) {
+                            Rectangle()
+                                .fill(dataPoint.color)
+                                .frame(width: 50, height: CGFloat(dataPoint.value * 25))
+                                .cornerRadius(6)
+                            
+                            Text("\(Int(dataPoint.value))")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            
+                            Text(dataPoint.category)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .frame(height: 150)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Priority Distribution Analysis")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    if let mostCommon = priorityData.max(by: { $0.value < $1.value }) {
+                        Text("Most applications are prioritized as: \(mostCommon.category)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    
+                    let highPriorityCount = priorityData.filter {
+                        $0.category == "High" || $0.category == "Urgent"
+                    }.reduce(0) { $0 + Int($1.value) }
+                    
+                    if highPriorityCount > 0 {
+                        Text("You have \(highPriorityCount) high-priority applications that need attention")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
                 }
+                .padding()
+                .background(Color(.systemGroupedBackground))
+                .cornerRadius(8)
             }
-            .frame(height: 150)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Priority Distribution Analysis")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                if let mostCommon = priorityData.max(by: { $0.value < $1.value }) {
-                    Text("Most applications are prioritized as: \(mostCommon.category)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                let highPriorityCount = priorityData.filter {
-                    $0.category == "High" || $0.category == "Urgent"
-                }.reduce(0) { $0 + Int($1.value) }
-                
-                if highPriorityCount > 0 {
-                    Text("You have \(highPriorityCount) high-priority applications that need attention")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                }
-            }
-            .padding()
-            .background(Color(.systemGroupedBackground))
-            .cornerRadius(8)
         }
     }
 }
 
-// MARK: - Supporting Views
+// Supporting view components
 
+// Funnel bar visualization for success metrics
 struct FunnelBarView: View {
     let title: String
     let count: Int
@@ -646,6 +709,7 @@ struct FunnelBarView: View {
     }
 }
 
+// Insight row for recommendations
 struct InsightRow: View {
     let icon: String
     let text: String
@@ -666,6 +730,7 @@ struct InsightRow: View {
     }
 }
 
+// Empty chart placeholder
 struct EmptyChartView: View {
     let message: String
     
@@ -687,8 +752,7 @@ struct EmptyChartView: View {
     }
 }
 
-// MARK: - Insights Section
-
+// Insights section with recommendations
 struct InsightsSection: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     
@@ -725,6 +789,11 @@ struct InsightsSection: View {
         let stats = jobManager.getApplicationStats()
         var insights: [String] = []
         
+        if stats.total == 0 {
+            insights.append("Start tracking your job applications to get personalized insights and recommendations.")
+            return insights
+        }
+        
         if stats.total < 5 {
             insights.append("You're just getting started! Aim for 5-10 applications per week for better results.")
         }
@@ -755,8 +824,7 @@ struct InsightsSection: View {
     }
 }
 
-// MARK: - Detailed Statistics
-
+// Detailed statistics section
 struct DetailedStatisticsSection: View {
     @EnvironmentObject var jobManager: JobApplicationManager
     let timeRange: AnalyticsView.TimeRange
@@ -787,6 +855,7 @@ struct DetailedStatisticsSection: View {
     }
 }
 
+// Individual statistic row
 struct StatRow: View {
     let title: String
     let value: String
@@ -806,8 +875,7 @@ struct StatRow: View {
     }
 }
 
-// MARK: - Data Models
-
+// Data models for charts
 struct ChartDataPoint {
     let category: String
     let value: Double
@@ -819,30 +887,24 @@ struct TimelinePoint {
     let applications: Int
 }
 
-// MARK: - Previews
-
+// Preview configurations
 #Preview("Analytics View") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return AnalyticsView()
+   
+    AnalyticsView()
         .environmentObject(manager)
 }
 
 #Preview("Key Metrics Dashboard") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return KeyMetricsDashboard()
+     KeyMetricsDashboard()
         .environmentObject(manager)
         .padding()
 }
 
 #Preview("Status Distribution Chart") {
     let manager = JobApplicationManager()
-    manager.setupSampleData()
-    
-    return StatusDistributionChart()
+     StatusDistributionChart()
         .environmentObject(manager)
         .padding()
 }

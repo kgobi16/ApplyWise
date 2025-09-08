@@ -13,7 +13,6 @@ struct KanbanView: View {
     @State private var showingAddView = false
     @State private var errorAlert: AppError?
     @State private var showingError = false
-    @State private var draggedApplication: JobApplication?
     
     var body: some View {
         NavigationView {
@@ -57,7 +56,7 @@ struct KanbanView: View {
         .navigationViewStyle(StackNavigationViewStyle()) // Force single view on iPad
     }
     
-    //Landscape Layout (Primary)
+    // MARK: - Landscape Layout (Primary)
     
     @ViewBuilder
     private func landscapeLayout(geometry: GeometryProxy) -> some View {
@@ -75,10 +74,7 @@ struct KanbanView: View {
                     ForEach(ApplicationStatus.allCases) { status in
                         KanbanColumnView(
                             status: status,
-                            applications: jobManager.getApplications(by: status),
-                            onDrop: { application in
-                                handleStatusChange(application: application, newStatus: status)
-                            }
+                            applications: jobManager.getApplications(by: status)
                         )
                         .frame(width: max(280, geometry.size.width / 6))
                         .frame(maxHeight: .infinity)
@@ -91,7 +87,7 @@ struct KanbanView: View {
         }
     }
     
-    //Portrait Layout (Fallback)
+    // MARK: - Portrait Layout (Fallback)
     
     @ViewBuilder
     private func portraitLayout(geometry: GeometryProxy) -> some View {
@@ -100,10 +96,7 @@ struct KanbanView: View {
                 ForEach(ApplicationStatus.allCases) { status in
                     KanbanColumnView(
                         status: status,
-                        applications: jobManager.getApplications(by: status),
-                        onDrop: { application in
-                            handleStatusChange(application: application, newStatus: status)
-                        }
+                        applications: jobManager.getApplications(by: status)
                     )
                     .frame(width: 280)
                 }
@@ -112,7 +105,7 @@ struct KanbanView: View {
         }
     }
     
-    //Helper Methods
+    // MARK: - Helper Methods
     
     private func handleAddApplication(_ application: JobApplication) {
         do {
@@ -127,14 +120,9 @@ struct KanbanView: View {
             showingError = true
         }
     }
-    
-    private func handleStatusChange(application: JobApplication, newStatus: ApplicationStatus) {
-        application.updateStatus(newStatus)
-        jobManager.updateApplication(application)
-    }
 }
 
-//Kanban Header View
+// MARK: - Kanban Header View
 
 struct KanbanHeaderView: View {
     @EnvironmentObject var jobManager: JobApplicationManager
@@ -206,15 +194,13 @@ struct QuickStatView: View {
     }
 }
 
-// Kanban Column View
+// MARK: - Kanban Column View
 
 struct KanbanColumnView: View {
     let status: ApplicationStatus
     let applications: [JobApplication]
-    let onDrop: (JobApplication) -> Void
     
     @EnvironmentObject var jobManager: JobApplicationManager
-    @State private var isTargeted = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -265,9 +251,6 @@ struct KanbanColumnView: View {
                     ForEach(applications) { application in
                         JobCardView(application: application)
                             .environmentObject(jobManager)
-                            .draggable(application) {
-                                JobCardPreview(application: application)
-                            }
                     }
                 }
                 .padding(.horizontal, 4)
@@ -301,15 +284,6 @@ struct KanbanColumnView: View {
         .padding(8)
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
-        .scaleEffect(isTargeted ? 1.02 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: isTargeted)
-        .dropDestination(for: JobApplication.self) { applications, location in
-            guard let application = applications.first else { return false }
-            onDrop(application)
-            return true
-        } isTargeted: { isTargeted in
-            self.isTargeted = isTargeted
-        }
     }
     
     private var emptyStateIcon: String {
@@ -335,12 +309,13 @@ struct KanbanColumnView: View {
     }
 }
 
-//Job Card View
+// MARK: - Job Card View
 
 struct JobCardView: View {
     @ObservedObject var application: JobApplication
     @EnvironmentObject var jobManager: JobApplicationManager
     @State private var showingDetail = false
+    @State private var showingStatusPicker = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -365,9 +340,13 @@ struct JobCardView: View {
                         .fill(application.priority.color)
                         .frame(width: 8, height: 8)
                     
-                    Circle()
-                        .fill(application.status.color)
-                        .frame(width: 12, height: 12)
+                    Button(action: {
+                        showingStatusPicker = true
+                    }) {
+                        Circle()
+                            .fill(application.status.color)
+                            .frame(width: 12, height: 12)
+                    }
                 }
             }
             
@@ -431,244 +410,19 @@ struct JobCardView: View {
             ApplicationDetailSheet(application: application)
                 .environmentObject(jobManager)
         }
-    }
-}
-
-// Job Card Preview for Drag
-
-struct JobCardPreview: View {
-    let application: JobApplication
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(application.companyName)
-                .font(.headline)
-                .fontWeight(.bold)
-            
-            Text(application.jobTitle)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-        .padding(8)
-        .background(Color(.systemBackground))
-        .cornerRadius(8)
-        .shadow(radius: 4)
-        .frame(width: 200)
-    }
-}
-
-// Add Job Application Sheet
-
-struct AddJobApplicationSheet: View {
-    @Environment(\.presentationMode) var presentationMode
-    @State private var companyName = ""
-    @State private var jobTitle = ""
-    @State private var contactEmail = ""
-    @State private var notes = ""
-    @State private var salary = ""
-    @State private var location = ""
-    @State private var priority: TaskPriority = .medium
-    @State private var showingError = false
-    @State private var errorMessage = ""
-    
-    let onSave: (JobApplication) -> Void
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Job Details") {
-                    TextField("Company Name", text: $companyName)
-                    TextField("Job Title", text: $jobTitle)
-                    TextField("Location", text: $location)
-                    TextField("Salary (optional)", text: $salary)
-                }
-                
-                Section("Contact") {
-                    TextField("Contact Email", text: $contactEmail)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
-                }
-                
-                Section("Priority") {
-                    Picker("Priority", selection: $priority) {
-                        ForEach(TaskPriority.allCases) { priority in
-                            HStack {
-                                Circle()
-                                    .fill(priority.color)
-                                    .frame(width: 12, height: 12)
-                                Text(priority.rawValue)
-                            }
-                            .tag(priority)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                }
-                
-                Section("Notes") {
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3...6)
+        .confirmationDialog("Change Status", isPresented: $showingStatusPicker) {
+            ForEach(ApplicationStatus.allCases) { status in
+                Button(status.rawValue) {
+                    application.updateStatus(status)
+                    jobManager.updateApplication(application)
                 }
             }
-            .navigationTitle("New Application")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveApplication()
-                    }
-                    .disabled(companyName.isEmpty || jobTitle.isEmpty)
-                }
-            }
-            .alert("Error", isPresented: $showingError) {
-                Button("OK") { }
-            } message: {
-                Text(errorMessage)
-            }
-        }
-    }
-    
-    private func saveApplication() {
-        let application = JobApplication(
-            companyName: companyName.trimmingCharacters(in: .whitespacesAndNewlines),
-            jobTitle: jobTitle.trimmingCharacters(in: .whitespacesAndNewlines),
-            contactEmail: contactEmail.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            salary: salary.trimmingCharacters(in: .whitespacesAndNewlines),
-            location: location.trimmingCharacters(in: .whitespacesAndNewlines),
-            priority: priority
-        )
-        
-        do {
-            try application.validate()
-            onSave(application)
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
+            Button("Cancel", role: .cancel) { }
         }
     }
 }
 
-// Application Detail Sheet
-
-struct ApplicationDetailSheet: View {
-    @ObservedObject var application: JobApplication
-    @EnvironmentObject var jobManager: JobApplicationManager
-    @Environment(\.presentationMode) var presentationMode
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Header
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(application.companyName)
-                            .font(.title)
-                            .bold()
-                        
-                        Text(application.jobTitle)
-                            .font(.title2)
-                            .foregroundColor(.secondary)
-                        
-                        HStack {
-                            Label(application.status.rawValue, systemImage: "circle.fill")
-                                .foregroundColor(application.status.color)
-                            
-                            Spacer()
-                            
-                            Label(application.priority.rawValue, systemImage: "flag.fill")
-                                .foregroundColor(application.priority.color)
-                        }
-                    }
-                    .padding()
-                    .background(Color.gray.opacity(0.05))
-                    .cornerRadius(12)
-                    
-                    // Details
-                    VStack(alignment: .leading, spacing: 16) {
-                        if !application.location.isEmpty {
-                            DetailRowView(title: "Location", value: application.location, icon: "location")
-                        }
-                        
-                        if !application.salary.isEmpty {
-                            DetailRowView(title: "Salary", value: application.salary, icon: "dollarsign.circle")
-                        }
-                        
-                        if !application.contactEmail.isEmpty {
-                            DetailRowView(title: "Contact", value: application.contactEmail, icon: "envelope")
-                        }
-                        
-                        DetailRowView(title: "Applied", value: application.applicationDate.formatted(date: .complete, time: .omitted), icon: "calendar")
-                        
-                        if let followUp = application.followUpDate {
-                            DetailRowView(title: "Follow Up", value: followUp.formatted(date: .complete, time: .omitted), icon: "bell")
-                        }
-                        
-                        if !application.notes.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("Notes", systemImage: "note.text")
-                                    .font(.headline)
-                                
-                                Text(application.notes)
-                                    .padding()
-                                    .background(Color.gray.opacity(0.05))
-                                    .cornerRadius(8)
-                            }
-                        }
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle("Application Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Close") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct DetailRowView: View {
-    let title: String
-    let value: String
-    let icon: String
-    
-    var body: some View {
-        HStack {
-            Label(title, systemImage: icon)
-                .font(.headline)
-                .frame(width: 100, alignment: .leading)
-            
-            Text(value)
-                .foregroundColor(.secondary)
-            
-            Spacer()
-        }
-    }
-}
-
-//Drag and Drop Extensions
-
-extension JobApplication: Transferable {
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(for: JobApplication.self, contentType: .jobApplication)
-    }
-}
-
-extension UTType {
-    static var jobApplication = UTType(exportedAs: "com.applywise.jobapplication")
-}
-
-// Previews (With dummy data)
+// MARK: - Previews
 
 #Preview("Kanban View") {
     let manager = JobApplicationManager()
@@ -677,27 +431,6 @@ extension UTType {
     return KanbanView()
         .environmentObject(manager)
         .previewInterfaceOrientation(.landscapeLeft)
-}
-
-#Preview("Kanban Column") {
-    let manager = JobApplicationManager()
-    let sample1 = TaskFactory.createJobApplication(companyName: "Apple Inc", jobTitle: "iOS Developer")
-    sample1.priority = .high
-    sample1.salary = "$120,000"
-    sample1.location = "Cupertino, CA"
-    
-    let sample2 = TaskFactory.createJobApplication(companyName: "Google", jobTitle: "Mobile Engineer")
-    sample2.priority = .medium
-    sample2.followUpDate = Date()
-    
-    return KanbanColumnView(
-        status: .applied,
-        applications: [sample1, sample2],
-        onDrop: { _ in }
-    )
-    .environmentObject(manager)
-    .frame(width: 300, height: 500)
-    .padding()
 }
 
 #Preview("Job Card") {

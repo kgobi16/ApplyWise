@@ -23,7 +23,7 @@ struct ContentView: View {
                 .tag(0)
             
             // Tab 2: Analytics placeholder
-            AnalyticsPlaceholderView()
+            AnalyticsView()
                 .environmentObject(jobManager)
                 .tabItem {
                     Image(systemName: "chart.bar")
@@ -58,38 +58,6 @@ struct ContentView: View {
 
 // Placeholder Views (We'll replace these in next steps)
 
-struct AnalyticsPlaceholderView: View {
-    @EnvironmentObject var jobManager: JobApplicationManager
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Text("Analytics Dashboard")
-                    .font(.largeTitle)
-                    .bold()
-                
-                // Show some basic stats
-                let stats = jobManager.getApplicationStats()
-                
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 16) {
-                    StatCard(title: "Total", value: "\(stats.total)", color: .blue)
-                    StatCard(title: "Interviews", value: "\(stats.interviews)", color: .purple)
-                    StatCard(title: "Offers", value: "\(stats.offers)", color: .green)
-                    StatCard(title: "Pending", value: "\(stats.pending)", color: .orange)
-                }
-                .padding()
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("Analytics")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
 
 struct ListPlaceholderView: View {
     @EnvironmentObject var jobManager: JobApplicationManager
@@ -240,7 +208,7 @@ struct StatCard: View {
 
 
 
-// MARK: - Previews
+// Previews
 
 #Preview("Content View") {
     ContentView()
@@ -258,7 +226,7 @@ struct StatCard: View {
     let manager = JobApplicationManager()
     manager.setupSampleData()
     
-    return AnalyticsPlaceholderView()
+    return AnalyticsView()
         .environmentObject(manager)
 }
 
